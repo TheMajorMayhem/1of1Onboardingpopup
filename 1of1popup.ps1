@@ -74,7 +74,7 @@ function Show-TOS {
     $tosBox = New-Object System.Windows.Controls.TextBox
     $tosBox.Margin = "10"
     $tosBox.TextWrapping = "Wrap"
-    $tosBox.VerticalScrollBarVisibility = "Auto"
+    $tosBox.VerticalScrollBarVisibility = "Hidden"
     $tosBox.AcceptsReturn = $true
     $tosBox.AcceptsTab = $false
     $tosBox.Text = $tosText
