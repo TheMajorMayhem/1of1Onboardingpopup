@@ -71,30 +71,31 @@ function Show-TOS {
     $tosText += "`r`n`r`n"
     $tosText += "Do you accept the Terms of Service? [Y/N]: "
 
-    $tosBox = New-Object System.Windows.Controls.TextBox
+    # Replace the TextBox with a RichTextBox for inline formatting
+    $tosBox = New-Object System.Windows.Controls.RichTextBox
     $tosBox.Margin = "10"
-    $tosBox.TextWrapping = "Wrap"
     $tosBox.VerticalScrollBarVisibility = "Hidden"
     $tosBox.AcceptsReturn = $true
     $tosBox.AcceptsTab = $false
-    $tosBox.Text = $tosText
     $tosBox.IsReadOnly = $false
     $tosBox.Background = 'Black'
     $tosBox.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FBBF24")
     $tosBox.FontSize = 24
     $tosBox.FontFamily = 'Consolas'
-    $tosBox.CaretIndex = $tosBox.Text.Length
-    $tosBox.SelectionStart = $tosBox.Text.Length
+    $tosBox.Document.Blocks.Clear()
+    $tosBox.Document.Blocks.Add([Windows.Documents.Paragraph]::new([Windows.Documents.Run]::new($tosText)))
+    $tosBox.CaretPosition = $tosBox.Document.ContentEnd
     $tosBox.Focusable = $true
 
     # Prevent editing above the prompt
-    $promptStart = $tosBox.Text.Length
+    $promptStart = $tosBox.Document.ContentStart.GetOffsetToPosition($tosBox.CaretPosition)
 
     $tosBox.Add_PreviewKeyDown({
         param($sender, $e)
         # Only allow input after the prompt
-        if ($tosBox.CaretIndex -lt $promptStart) {
-            $tosBox.CaretIndex = $tosBox.Text.Length
+        $currentOffset = $tosBox.Document.ContentStart.GetOffsetToPosition($tosBox.CaretPosition)
+        if ($currentOffset -lt $promptStart) {
+            $tosBox.CaretPosition = $tosBox.Document.ContentEnd
             $e.Handled = $true
             return
         }
@@ -111,19 +112,30 @@ function Show-TOS {
                 "$guid" | Out-File $keyFile -Encoding ASCII -Force
                 "$username|$guid" | Out-File $logFile -Append -Encoding ASCII
 
-                # Append links and next prompt to the ToS box
-                $tosBox.AppendText("`r`n`r`nThank you for accepting the Terms of Service.`r`nVisit these resources:`r`n")
-                $tosBox.AppendText("View ToS online --> https://www.1of1servers.com/tos`r`n")
-                $tosBox.AppendText("Visit 1of1 Servers Docs --> https://docs.1of1servers.com/`r`n")
-                $tosBox.AppendText("Visit 1of1 Servers Roadmap --> https://trello.com/b/ZsoaDlZR/1-of-1-servers-roadmap`r`n")
-                $tosBox.AppendText("Visit 1of1 Servers Merch --> https://merch.1of1servers.com/`r`n")
-                $tosBox.AppendText("Visit 1of1 Servers Status --> https://status.1of1servers.com/`r`n")
-                $tosBox.AppendText("Visit 1of1 Servers YouTube --> https://youtube.com/channel/1of1servers`r`n")
-                $tosBox.AppendText("`r`nAre you done reading? [Y/N]: ")
-                $tosBox.CaretIndex = $tosBox.Text.Length
+                # Append thank you message in white
+                $para = [Windows.Documents.Paragraph]::new()
+                $runWhite = [Windows.Documents.Run]::new("`r`n`r`nThank you for accepting the Terms of Service.`r`nVisit these resources:`r`n")
+                $runWhite.Foreground = [System.Windows.Media.Brushes]::White
+                $para.Inlines.Add($runWhite)
+                $tosBox.Document.Blocks.Add($para)
+
+                # Append links in default color
+                $links = @(
+                    "View ToS online --> https://www.1of1servers.com/tos`r`n",
+                    "Visit 1of1 Servers Docs --> https://docs.1of1servers.com/`r`n",
+                    "Visit 1of1 Servers Roadmap --> https://trello.com/b/ZsoaDlZR/1-of-1-servers-roadmap`r`n",
+                    "Visit 1of1 Servers Merch --> https://merch.1of1servers.com/`r`n",
+                    "Visit 1of1 Servers Status --> https://status.1of1servers.com/`r`n",
+                    "Visit 1of1 Servers YouTube --> https://youtube.com/channel/1of1servers`r`n"
+                )
+                foreach ($link in $links) {
+                    $tosBox.Document.Blocks.Add([Windows.Documents.Paragraph]::new([Windows.Documents.Run]::new($link)))
+                }
+                $tosBox.Document.Blocks.Add([Windows.Documents.Paragraph]::new([Windows.Documents.Run]::new("`r`nAre you done reading? [Y/N]: ")))
+                $tosBox.CaretPosition = $tosBox.Document.ContentEnd
                 $tosBox.ScrollToEnd()
                 $script:tosAccepted = $true
-                $script:promptStart2 = $tosBox.Text.Length
+                $script:promptStart2 = $tosBox.Document.ContentStart.GetOffsetToPosition($tosBox.CaretPosition)
                 return
             } elseif ($e.Key -eq [System.Windows.Input.Key]::N) {
                 $e.Handled = $true
@@ -136,8 +148,9 @@ function Show-TOS {
             }
         } elseif ($script:tosAccepted -and -not $script:linksPrompt) {
             # Second prompt: Are you done reading?
-            if ($tosBox.CaretIndex -lt $script:promptStart2) {
-                $tosBox.CaretIndex = $tosBox.Text.Length
+            $currentOffset = $tosBox.Document.ContentStart.GetOffsetToPosition($tosBox.CaretPosition)
+            if ($currentOffset -lt $script:promptStart2) {
+                $tosBox.CaretPosition = $tosBox.Document.ContentEnd
                 $e.Handled = $true
                 return
             }
@@ -160,17 +173,19 @@ function Show-TOS {
                 $tosWindow.Close()
             } elseif ($e.Key -eq [System.Windows.Input.Key]::N) {
                 $e.Handled = $true
-                $tosBox.AppendText("`r`nAre you done reading? [Y/N]: ")
-                $tosBox.CaretIndex = $tosBox.Text.Length
+                # Append the prompt in yellow
+                $tosBox.Document.Blocks.Add([Windows.Documents.Paragraph]::new([Windows.Documents.Run]::new("`r`nAre you done reading? [Y/N]: ")))
+                $tosBox.CaretPosition = $tosBox.Document.ContentEnd
                 $tosBox.ScrollToEnd()
-                $script:promptStart2 = $tosBox.Text.Length
+                $script:promptStart2 = $tosBox.Document.ContentStart.GetOffsetToPosition($tosBox.CaretPosition)
                 return
             }
         } elseif ($e.Key -eq [System.Windows.Input.Key]::Back) {
             # Prevent deleting the prompt
-            if ($script:tosAccepted -and $tosBox.CaretIndex -le $script:promptStart2) {
+            $currentOffset = $tosBox.Document.ContentStart.GetOffsetToPosition($tosBox.CaretPosition)
+            if ($script:tosAccepted -and $currentOffset -le $script:promptStart2) {
                 $e.Handled = $true
-            } elseif (-not $script:tosAccepted -and $tosBox.CaretIndex -le $promptStart) {
+            } elseif (-not $script:tosAccepted -and $currentOffset -le $promptStart) {
                 $e.Handled = $true
             }
         }
@@ -179,8 +194,7 @@ function Show-TOS {
     $tosWindow.Content = $tosBox
     $tosWindow.Add_SourceInitialized({
         $tosBox.Focus()
-        $tosBox.CaretIndex = $tosBox.Text.Length
-        $tosBox.SelectionStart = $tosBox.Text.Length
+        $tosBox.CaretPosition = $tosBox.Document.ContentEnd
     })
 
     $tosWindow.ShowDialog() | Out-Null
